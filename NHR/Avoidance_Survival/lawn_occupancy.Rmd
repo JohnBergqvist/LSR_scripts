@@ -1,0 +1,293 @@
+---
+title: "LSR R code"
+output:
+  html_document:
+    df_print: paged
+---
+
+```{r, warning=FALSE, echo=TRUE}
+library(ggplot2)
+library(dplyr)
+library(tidyverse)
+library(ggbeeswarm)
+library(ggrepel)
+
+library(scales)
+library(lme4)
+library(lmerTest)
+```
+
+
+## Figure 6A - Import and plot dataset for N2 worms only
+```{r, warning=FALSE, echo=TRUE}
+
+df_n2 = read_csv("/Volumes/jb3623$/Assessments/LSR/LSR_data/NHR/Avoidance_Screen/x.master/N2_avoidance_master.csv")
+
+df_n2$bacteria_time_date = paste(df_n2$bacteria, df_n2$time_h , df_n2$date, sep = "_")
+df_n2$bacteria = factor(df_n2$bacteria, levels = c("OP50", "JUb134"))
+df_n2$plate = factor(df_n2$plate, levels = c("1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12"))
+df_n2$plate_on_day = factor(df_n2$plate_on_day, levels = c("1", "2"))
+df_n2$time_h = factor(df_n2$time_h, levels = c("6h", "24h"))
+df_n2$percentage = df_n2$on_lawn/df_n2$total_numb_worms
+df_n2 = na.omit(df_n2)
+
+df_n2$worm_date = paste(df_n2$worm, df_n2$date, sep = "_")
+
+  
+# colourblind palette with grey:
+cbPalette <- c("#999999", "#E69F00", "#56B4E9", "#009E73", "#F0E442", "#0072B2", "#D55E00", "#CC79A7")
+# OP50 vs. JUb134 colours
+op50vsjub134Palette <- c("#3274A1", "#DF8538")
+
+
+
+# Perform t-test for "6h"
+t_test_6h = t.test(percentage ~ bacteria, data = subset(df_n2, time_h == "6h" & (bacteria == "OP50" | bacteria == "JUb134")))
+print(t_test_6h)
+
+# Perform t-test for "24h"
+t_test_24h = t.test(percentage ~ bacteria, data = subset(df_n2, time_h == "24h" & (bacteria == "OP50" | bacteria == "JUb134")))
+print(t_test_24h)
+
+# Convert p-values to scientific notation if lower than 0.001
+p_value_6h = ifelse(t_test_6h$p.value < 0.001, format(t_test_6h$p.value, scientific = TRUE), round(t_test_6h$p.value, digits = 2))
+p_value_24h = ifelse(t_test_24h$p.value < 0.001, format(t_test_24h$p.value, scientific = TRUE), round(t_test_24h$p.value, digits = 2))
+
+
+  
+# Violin plots showing difference in lawn presence for worms on OP50 vs. JUb134 lawns
+
+df_n2_fig6a = ggplot(df_n2, aes(time_h, percentage, fill=bacteria)) +
+  geom_violin(position = position_dodge(width = 0.5), draw_quantiles = c(0.25, 0.5, 0.75)) +
+  #geom_point(position = position_jitterdodge(seed = 1, dodge.width = 0.9)) +
+  geom_quasirandom(dodge.width = 0.5, varwidth = TRUE) +
+  scale_fill_manual(values = c("#3274A1", "#DF8538")) +
+  theme_bw(base_size = 16) +
+  theme(legend.title = element_blank(),
+        #add space above grid
+        plot.margin = margin(t = 10, r = 5, b = 5, l = 5, unit = "mm"),
+        #remove the top and right border of graph
+        axis.line = element_line(colour = "black"),
+        panel.border = element_blank(),
+        panel.backgroun = element_blank()) +
+  scale_y_continuous(name = "Percentage N2 worms on bacteria", labels = scales::percent_format(scale = 100), limits = c(0, 1.06)) +
+  xlab("") +
+  # Add p-values
+  annotate("text", x = 0.93, y = 1.06, label = paste("p =", p_value_6h), size = 3.5, color = "#333333") +
+  annotate("text", x = 2.0, y = 1.06, label = paste("p =", p_value_24h), size = 3.5, color = "#333333") +
+  # Add significance lines if p < 0.001
+  geom_segment(aes(x = 0.6, xend = 1.25, y = 1.025, yend = 1.025), 
+               color = "black", size = 0.7, alpha = 0.6, data = NULL, inherit.aes = TRUE) +
+  geom_segment(aes(x = 1.7, xend = 2.3, y = 1.025, yend = 1.025), 
+               color = "black", size = 0.7, alpha = 0.6, data = NULL, inherit.aes = TRUE)
+
+print(df_n2_fig6a)
+```
+
+
+### NHR Violin plot of avoidance index change to JUb134 at 6h ((Avoidance Index of NHR mutant - Avoidance Index of WT)/Avoidance Index of WT)
+### Fig 6B
+
+```{r}
+df_avoid_index = read_csv("/Volumes/jb3623$/Assessments/LSR/LSR_data/NHR/Avoidance_Screen/x.master/nhr_screen_master_copy.csv")
+df_avoid_index$bacteria = factor(df_avoid_index$bacteria, levels = c("JUb134"))
+df_avoid_index$worm = factor(df_avoid_index$worm, levels = c("N2", "CHS10779_UBJ", "CHS10518_JZK", "CHS10807_RLC", "CHS10810_AHR", "CHS10801_TSV", "CHS10798_YAC", "CHS10806_QLX", "CHS10775_TYE", "CHS10797_XST", "CHS10812_FZJ", "CHS10542_SJA", "CHS10800_THB", "CHS10778_HBD", "CHS10811_QNO", "CHS10799_GUM", "CHS10516_PPW", "CHS10796_NIL", "CHS10803_YTO", "CHS10804_BTA", "CHS11225_SHK", "CHS11156_GYF", "CHS11145_DYU", "CHS11138_WZS", "CHS10940_TMC", "CHS10939_WSL", "CHS10937_GRL", "CHS10928_VQF", "CHS10897_EYG", "CHS10881_XGU", "CHS10825_TXS", "CHS10822_YPQ", "CHS10818_DMM", "CHS10817_BPB", "CHS10776_LDH", "CHS11151_VVM", "CHS10979_LIP", "CHS10978_LCO", "CHS10973_HYV", "CHS10972_TLX", "CHS10938_GKE", "CHS10899_SFL", "CHS10883_ZWT", "CHS10824_XAV", "CHS10823_AQZ", "CHS10821_VBQ", "CHS10820_BUV", "CHS10815_KOQ", "CHS10814_BBX", "CHS10813_XHL", "CHS10771_UIN", "CHS10781_IJV", "CHS10805_GGG", "CHS11223_TIA", "CHS10514_MDY", "CHS10519_UOU", "CHS11229_OJL", "CHS10982_AEU", "CHS10522_KKS", "CHS10780_FZF", "CHS10526_QJJ", "CHS10981_CUC", "CHS10903_ZJM", "CHS10998_TMH", "CHS10999_QAH", "CHS11004_CSO", "CHS10941_EDU", "CHS11141_VOX", "CHS10900_OZF", "CHS11001_BNF", "CHS11136_XKP", "CHS10808_XUZ", "CHS10902_NQY", "CHS10904_LCE", "CHS10968_VWU", "CHS10460_BDG",	"CHS10502_HJI",	"CHS10503_LTQ",	"CHS10505_API",	"CHS10504_ZJT",	"CHS10500_VMG",	"CHS10506_CGA",	"CHS10482_VOP", "CHS10507_JWJ",	"CHS10458_SGV",	"CHS10905_HHZ",	"CHS10983_QXV",	"CHS10980_KSF"))
+df_avoid_index$time_h = factor(df_avoid_index$time_h, levels = c("6h"))
+df_avoid_index$YYMMDD_DD = factor(df_avoid_index$YYMMDD_DD, levels = c("240208_09", "240222_23", "240223_24", "240229_240301", "240301_240302", "240307_08", "240308_09", "240314_15"))
+
+df_avoid_index = na.omit(df_avoid_index)
+
+
+
+
+
+violin_fig_avoid_index = 
+  ggplot(df_avoid_index, aes(bacteria, avoidance_index_change, fill = bacteria, label = worm)) +
+  geom_violin(draw_quantiles = c(0.10, 0.5, 0.90)) +
+  geom_quasirandom(color = dplyr::case_when(df_avoid_index$avoidance_index_change < -0.25 ~ "#009E73",
+                                            df_avoid_index$avoidance_index_change > -0.25 ~ "black")) +
+  geom_text_repel(aes(label = ifelse(avoidance_index_change < -0.25, as.character(worm), '')),
+                  size = 4,
+                  point.padding = 0.5, 
+                  box.padding = 0.3,
+                  nudge_x = 0.7, nudge_y = -0.5,  
+                  segment.color = NA) +  
+   # geom_label_repel(aes(label =ifelse(avoidance_index_change < -0.25, as.character(worm), '')),
+    #                 box.padding = 0.35,
+     #                point.padding = 0.5,
+      #               segment.color = NA) +
+  scale_y_continuous(name = "Lawn occupancy  change", limits = c(-1.0, 0.35)) +
+  xlab("") +
+  scale_fill_manual(values = c("#DF8538")) +
+  theme_bw(base_size = 16) +
+  theme(legend.title = element_blank(),
+        #add space above grid
+        plot.margin = margin(t = 10, r = 5, b = 5, l = 5, unit = "mm"),
+        #remove the top and right border of graph
+        axis.line = element_line(colour = "black"),
+        panel.border = element_blank(),
+        panel.backgroun = element_blank())
+
+print(violin_fig_avoid_index)
+
+#interactive plot to identify the dots:
+#ggplotly(violin_fig_avoid_index)
+```
+
+
+## Plotting potential nhr mutant hits (Fig 6C)
+```{r}
+df_nhr_screen = read_csv("/Volumes/jb3623$/Assessments/LSR/LSR_data/NHR/Avoidance_Screen/x.master/nhr_screen_master.csv") %>%
+  mutate(
+    r_percent = on_lawn / total_numb_worms,
+    bacteria = factor(bacteria, levels = c("OP50", "JUb134")),
+    worm = factor(worm, levels = c("N2", "N2 (30)", "CHS10779_UBJ", "CHS10518_JZK", "CHS10807_RLC", "CHS10810_AHR", "CHS10801_TSV", "CHS10798_YAC",
+                                   "CHS10806_QLX", "CHS10775_TYE", "CHS10797_XST", "CHS10812_FZJ", "CHS10542_SJA", "CHS10800_THB", "CHS10778_HBD",
+                                   "CHS10811_QNO", "CHS10799_GUM", "CHS10516_PPW", "CHS10796_NIL", "CHS10803_YTO", "CHS10804_BTA", "CHS11225_SHK",
+                                   "CHS11156_GYF", "CHS11145_DYU", "CHS11138_WZS", "CHS10940_TMC", "CHS10939_WSL", "CHS10937_GRL", "CHS10928_VQF",
+                                   "CHS10897_EYG", "CHS10881_XGU", "CHS10825_TXS", "CHS10822_YPQ", "CHS10818_DMM", "CHS10817_BPB", "CHS10776_LDH",
+                                   "CHS11151_VVM", "CHS10979_LIP", "CHS10978_LCO", "CHS10973_HYV", "CHS10972_TLX", "CHS10938_GKE", "CHS10899_SFL",
+                                   "CHS10883_ZWT", "CHS10824_XAV", "CHS10823_AQZ", "CHS10821_VBQ", "CHS10820_BUV", "CHS10815_KOQ", "CHS10814_BBX",
+                                   "CHS10813_XHL", "CHS10771_UIN", "CHS10781_IJV", "CHS10805_GGG", "CHS11223_TIA", "CHS10514_MDY", "CHS10519_UOU",
+                                   "CHS11229_OJL", "CHS10982_AEU", "CHS10522_KKS", "CHS10780_FZF", "CHS10526_QJJ", "CHS10981_CUC", "CHS10903_ZJM",
+                                   "CHS10998_TMH", "CHS10999_QAH", "CHS11004_CSO", "CHS10941_EDU", "CHS11141_VOX", "CHS10900_OZF", "CHS11001_BNF",
+                                   "CHS11136_XKP", "CHS10808_XUZ", "CHS10902_NQY", "CHS10904_LCE", "CHS10968_VWU", "CHS10460_BDG", "CHS10502_HJI",
+                                   "CHS10503_LTQ", "CHS10505_API", "CHS10504_ZJT", "CHS10500_VMG", "CHS10506_CGA", "CHS10482_VOP", "CHS10507_JWJ",
+                                   "CHS10458_SGV", "CHS10905_HHZ", "CHS10983_QXV", "CHS10980_KSF")),
+    YYMMDD_DD = factor(YYMMDD_DD, levels = c("240208_09", "240222_23", "240223_24", "240229_240301", "240301_240302", "240307_08", "240308_09",
+                                                 "240314_15")),
+    time_h = factor(time_h, levels = c("0h", "6h", "12h", "24h")),
+    worm_date = paste(worm, YYMMDD_DD, sep = "_")
+  )
+
+
+## Dataframe with data of N2 from the experiments where potential hits were found (- Used for the ESA?)
+df_nhr_hits_n2lim = df_nhr_screen %>% 
+  filter(time_h == "6h" & worm %in% c("N2", "CHS10507_JWJ", "CHS10940_TMC", "CHS10514_MDY", "CHS10771_UIN", "CHS11145_DYU") & YYMMDD_DD %in% c("240229_240301", "240307_08", "240314_15"))
+
+## Plot initial nhr hits with experiment-limited N2s
+nhr_hits_fig3b = ggplot(df_nhr_hits_n2lim, aes(x = worm, y = r_percent, fill = bacteria)) +
+  geom_boxplot() +
+  geom_point(position = position_dodge(width = 0.75), aes(group = bacteria), size = 1) +
+  theme_bw(base_size = 14) +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1),
+        legend.title = element_blank(),
+        #add space above grid
+        plot.margin = margin(t = 10, r = 5, b = 5, l = 5, unit = "mm"),
+        #remove the top and right border of graph
+        axis.line = element_line(colour = "black"),
+        panel.border = element_blank(),
+        panel.background = element_blank()) +
+  scale_y_continuous(name = "Percentage worms on bacteria", labels = scales::percent_format(scale = 100), limits = c(0, 1.06)) +
+  xlab("") +
+  scale_fill_manual(values = c("#3274A1", "#DF8538"))
+print(nhr_hits_fig3b)
+
+
+
+## Dataframe modified to look at potential hits based off violin plot above - limited N2s
+## *** want to make a graph of percentage occupancy where each N2 occupancy for that date is shown next to the occupancy of the mutant.***
+### Like in CHangchun's GPCR's paper
+
+# Set the desired order of the categorical values on the X-axis
+desired_order <- c("CHS10507_JWJ_240314_15", "N2_240314_15", "CHS10798_YAC_240222_23", "N2_240222_23", "CHS10808_XUZ_240308_09", "N2_240308_09", "CHS10940_TMC_240229_240301", "N2_240229_240301", "CHS11001_BNF_240308_09", "CHS11229_OJL_240307_08", "N2_240307_08")
+
+# Filter and mutate dataframe
+df_nhr_hits_new = df_nhr_screen %>%
+  filter((time_h == "6h" & bacteria == "JUb134") & worm_date %in% c("CHS10507_JWJ_240314_15", "N2_240314_15", "CHS10798_YAC_240222_23", "N2_240222_23", "CHS10808_XUZ_240308_09", "N2_240308_09", "CHS10940_TMC_240229_240301", "N2_240229_240301", "CHS11001_BNF_240308_09", "CHS11229_OJL_240307_08", "N2_240307_08")) %>% 
+  mutate(worm_date = factor(worm_date, levels = desired_order))
+
+# Plot nhr hits with all N2s
+fig_new_hits = ggplot(df_nhr_hits_new, aes(x = worm_date, y = r_percent, fill = worm == "N2")) +
+  geom_boxplot() +
+  geom_point(position = position_dodge(width = 0.75), aes(group = bacteria), size = 1.5) +
+  theme_bw(base_size = 14) +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1),
+        legend.title = element_blank(),
+        #add space above grid
+        plot.margin = margin(t = 10, r = 5, b = 5, l = 5, unit = "mm"),
+        #remove the top and right border of graph
+        axis.line = element_line(colour = "black"),
+        panel.border = element_blank(),
+        panel.background = element_blank()) +
+  scale_y_continuous(name = "Percentage worms on bacteria", labels = scales::percent_format(scale = 100), limits = c(0, 1)) +
+  xlab("") +
+  scale_fill_manual(values = c("#009E73", "grey50"))
+
+print(fig_new_hits)
+
+
+```
+
+
+## Plotting the lawn occupancy of the nhr-49;nhr-80 double mutant, nhr-66 and nhr-49 single mutants
+```{r}
+
+df = read_csv("/Volumes/jb3623$/Assessments/LSR/LSR_data/NHR/Avoidance_Screen/x.master/nhr_rerun_hits.csv")
+#View(df)
+#df = na.omit(df)
+
+# Calculate r_percent
+df$r_percent = df$on_lawn/df$total_numb_worms
+
+# Convert categorical variables to factors with specified levels
+df$bacteria <- factor(df$bacteria, levels = c("OP50", "JUb134"))
+df$worm <- factor(df$worm, levels = c("N2",	"CHS10507_JWJ", "CHS10968_VWU", "CHS11246"))
+df$latest_dev_stage <- factor(df$latest_dev_stage, levels = c("n", "L1", "L2", "L3", "L4", "YA"))
+df$time_h <- factor(df$time_h, levels = c("0h", "6h", "24h", "48h", "72h"))
+df$run_number <- factor(df$run_number, levels = c("run_1", "run_2", "run_3", "run_4"))
+
+df_mean = df %>%
+  mutate(bacteria_worm_time = paste(bacteria, worm, time_h, sep = "_"))
+
+#View(df_mean)
+
+# mean percentage worms on lawn
+df_mean = df_mean %>% 
+  group_by(bacteria_worm_time) %>% 
+  mutate(r_mean = mean(r_percent))
+
+df_mean = df_mean %>% 
+  group_by(bacteria_worm_time) %>% 
+  mutate(r_stdev = sd(r_percent))
+
+# mean of number of dead worms 
+df_mean = df_mean %>% 
+  group_by(bacteria_worm_time) %>% 
+  mutate(mean_dead = mean(no_dead))
+
+df_mean = df_mean %>% 
+  group_by(bacteria_worm_time) %>% 
+  mutate(stdev_dead = sd(no_dead))
+
+df_mean = na.omit(df_mean)
+
+
+## Lineplot of mean lawn occupancy with stdev error bars
+lineplot_lawn = ggplot(df_mean, aes(time_h, r_mean, group = bacteria, , color = bacteria)) +
+  geom_line() +
+  geom_point() +
+  facet_wrap(~worm) +
+  geom_errorbar(aes(ymin = r_mean - r_stdev, ymax = r_mean + r_stdev), width = 0.1) +
+  scale_color_manual(values = c("#3274A1", "#DF8538", "#CC79A7")) +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1)) +
+  scale_y_continuous(labels = scales::percent_format(scale = 100)) +
+  ylab("Percentage worms on the lawn") +
+  xlab("")
+
+print(lineplot_lawn)
+
+
+```
+
+
+
+
+
+
+
+
+
+
+
+
